@@ -396,6 +396,16 @@ public class PlayerMovement : MonoBehaviour
         
         return abilities.Count > 0 ? string.Join(", ", abilities) : "None";
     }
+
+    /// <summary>
+    /// Check if player is currently in orb mode
+    /// </summary>
+    public bool IsInOrbMode => isOrbMode;
+
+    /// <summary>
+    /// Get the player's Rigidbody2D component for external physics interactions
+    /// </summary>
+    public Rigidbody2D GetRigidbody() => rb;
     
     // ===== ORB MODE SYSTEM =====
     
