@@ -6,10 +6,12 @@ The Orb Mode is the initial movement state in your 2D Platformer, where the play
 ## 🎮 Controls
 
 ### Orb Mode (Stage 0)
-- **A/D**: Gentle left/right floating movement
-- **Space**: Light Pulse (upward boost)  
-- **Space + A/D**: Directional Light Pulse (up and left/right)
-- **Reduced control** - slower, floaty movement matches ethereal feel
+- **A/D**: Apply gentle forces for drifting movement (only while airborne/floating)
+- **Space**: Light Pulse (upward boost that creates lasting momentum)  
+- **Space + A/D**: Directional Light Pulse (diagonal momentum)
+- **Physics-based movement** - orb maintains momentum and drifts naturally
+- **Airborne control only** - no left/right movement when resting on ground
+- **Momentum preservation** - forces from pulses and environmental elements create lasting motion
 
 ### Traditional Platformer (Stage 1+)  
 - **A/D**: Left/Right movement
@@ -21,19 +23,26 @@ The Orb Mode is the initial movement state in your 2D Platformer, where the play
 ### Key Features
 1. **Reduced Gravity**: `orbGravityScale = 0.3f` creates floating effect
 2. **Light Pulse Mechanics**: Space bar triggers upward or directional impulses
-3. **Floating Damping**: Gentle velocity reduction for smooth floating feel
-4. **Pulse Cooldown**: Prevents spam clicking for balanced gameplay
+3. **Inertia-Driven Movement**: Orb maintains momentum from forces and drifts naturally
+4. **Air Resistance**: Minimal drag allows momentum preservation while preventing runaway speeds
+5. **Pulse Cooldown**: Prevents spam clicking for balanced gameplay
 
 ### Settings (Configurable in Inspector)
 ```csharp
-[SerializeField] float orbGravityScale = 0.3f;      // Reduced gravity
+// Basic Orb Settings
+[SerializeField] float orbGravityScale = 0.3f;      // Reduced gravity for floating
 [SerializeField] float orbPulseForce = 8f;          // Upward pulse strength  
 [SerializeField] float orbPulseSideForce = 6f;      // Horizontal pulse strength
-[SerializeField] float orbFloatDamping = 0.98f;     // Velocity damping
 [SerializeField] float orbPulseCooldown = 0.2f;     // Cooldown between pulses
-[SerializeField] float orbMoveSpeed = 3f;           // Gentle horizontal movement
-[SerializeField] float orbMoveAcceleration = 15f;   // Slow acceleration for floaty feel
+
+// Inertia-Driven Movement
+[SerializeField] float orbMoveForce = 4f;           // Force applied for A/D movement (airborne only)
+[SerializeField] float orbAirResistance = 0.99f;    // Air resistance (0.99 = very little drag)  
+[SerializeField] float orbMaxSpeed = 12f;           // Maximum speed limit
+[SerializeField] bool enableSpeedLimiting = true;   // Whether to limit maximum speed
 ```
+
+**Important**: A/D movement only works when the orb is airborne (`!isGrounded`). When resting on the ground, the orb cannot move horizontally - it must first pulse (Space) to become airborne before gaining directional control.
 
 ## 🏗️ Level Design Considerations
 

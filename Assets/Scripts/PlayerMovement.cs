@@ -34,10 +34,13 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float orbGravityScale = 0.3f;      // Reduced gravity for floating
     [SerializeField] float orbPulseForce = 8f;          // Upward pulse force
     [SerializeField] float orbPulseSideForce = 6f;      // Horizontal pulse force
-    [SerializeField] float orbFloatDamping = 0.98f;     // Velocity damping for floating feel
     [SerializeField] float orbPulseCooldown = 0.2f;     // Time between pulses
-    [SerializeField] float orbMoveSpeed = 3f;           // Gentle horizontal movement speed
-    [SerializeField] float orbMoveAcceleration = 15f;   // Slower acceleration for floaty feel
+    
+    [Header("Orb Inertia Settings")]
+    [SerializeField] float orbMoveForce = 4f;           // Force applied for A/D movement
+    [SerializeField] float orbAirResistance = 0.99f;    // Air resistance (0.99 = very little drag)
+    [SerializeField] float orbMaxSpeed = 12f;           // Maximum speed to prevent runaway velocity
+    [SerializeField] bool enableSpeedLimiting = true;   // Whether to limit maximum speed
     
     [Header("Ability Unlocks")]
     [SerializeField] bool isOrbMode = true;            // Stage 0: Floating orb mode
@@ -429,22 +432,27 @@ public class PlayerMovement : MonoBehaviour
     }
     
     /// <summary>
-    /// Handle orb physics - floating with damping and gentle movement
+    /// Handle orb physics - inertia-driven movement with momentum preservation
     /// </summary>
     void HandleOrbPhysics()
     {
-        // Handle gentle horizontal movement
-        float targetVx = moveInput.x * orbMoveSpeed;
-        float currentVx = rb.linearVelocity.x;
+        // Apply horizontal movement force ONLY when airborne (floating)
+        if (!isGrounded && Mathf.Abs(moveInput.x) > 0.1f)
+        {
+            Vector2 moveForce = new Vector2(moveInput.x * orbMoveForce, 0f);
+            rb.AddForce(moveForce, ForceMode2D.Force);
+        }
         
-        // Apply gentle acceleration towards target velocity
-        float newVx = Mathf.MoveTowards(currentVx, targetVx, orbMoveAcceleration * Time.fixedDeltaTime);
+        // Apply minimal air resistance to maintain momentum but prevent infinite acceleration
+        Vector2 currentVelocity = rb.linearVelocity;
+        Vector2 resistanceForce = currentVelocity * (1f - orbAirResistance);
+        rb.AddForce(-resistanceForce, ForceMode2D.Force);
         
-        // Apply gentle damping to vertical velocity for floating feel
-        float dampedVy = rb.linearVelocity.y * orbFloatDamping;
-        
-        // Update velocity
-        rb.linearVelocity = new Vector2(newVx, dampedVy);
+        // Optional speed limiting to prevent runaway velocity
+        if (enableSpeedLimiting && currentVelocity.magnitude > orbMaxSpeed)
+        {
+            rb.linearVelocity = currentVelocity.normalized * orbMaxSpeed;
+        }
     }
     
     /// <summary>
