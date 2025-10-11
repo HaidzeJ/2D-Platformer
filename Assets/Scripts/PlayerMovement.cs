@@ -30,11 +30,32 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float dashDuration = 0.14f;
     [SerializeField] float dashCooldown = 0.5f;
 
+    [Header("Orb Mode Settings")]
+    [SerializeField] float orbGravityScale = 0.3f;      // Reduced gravity for floating
+    [SerializeField] float orbPulseForce = 8f;          // Upward pulse force
+    [SerializeField] float orbPulseSideForce = 6f;      // Horizontal pulse force
+    [SerializeField] float orbFloatDamping = 0.98f;     // Velocity damping for floating feel
+    [SerializeField] float orbPulseCooldown = 0.2f;     // Time between pulses
+    [SerializeField] float orbMoveSpeed = 3f;           // Gentle horizontal movement speed
+    [SerializeField] float orbMoveAcceleration = 15f;   // Slower acceleration for floaty feel
+    
+    [Header("Ability Unlocks")]
+    [SerializeField] bool isOrbMode = true;            // Stage 0: Floating orb mode
+    [SerializeField] bool canMove = false;             // Stage 1: Basic movement
+    [SerializeField] bool canJump = false;             // Stage 2: Jump unlocked
+    [SerializeField] bool canDoubleJump = false;       // Stage 3: Double jump
+    [SerializeField] bool canDash = false;             // Stage 4: Dash ability
+    [SerializeField] bool canWallJump = false;         // Stage 5: Wall jump (if you plan to add it)
+
     Rigidbody2D rb;
     PlayerInput playerInput;
     InputAction moveAction;
     InputAction jumpAction;
     InputAction dashAction;
+    
+    // Orb mode variables
+    float lastPulseTime;
+    float originalGravityScale;
 
     Vector2 moveInput = Vector2.zero;
     bool jumpHeld;
@@ -84,6 +105,12 @@ public class PlayerMovement : MonoBehaviour
             }
         }
         ResetJumps();
+        
+        // Store original gravity for mode switching
+        originalGravityScale = rb.gravityScale;
+        
+        // Set initial orb mode if enabled
+        UpdateMovementMode();
     }
 
     void OnDisable()
@@ -138,8 +165,16 @@ public class PlayerMovement : MonoBehaviour
     {
         if (isDashing) return; // dash controls velocity during dash
 
+        // Handle orb mode physics
+        if (isOrbMode)
+        {
+            HandleOrbPhysics();
+            return;
+        }
+
+        // Normal platformer movement
         // Horizontal movement with acceleration smoothing
-        float targetVx = moveInput.x * maxSpeed;
+        float targetVx = canMove ? moveInput.x * maxSpeed : 0f; // Check if movement is unlocked
         float accel = isGrounded ? runAcceleration : airAcceleration;
         float decel = isGrounded ? runDeceleration : airDeceleration;
 
@@ -181,6 +216,14 @@ public class PlayerMovement : MonoBehaviour
 
     void OnJumpPressed()
     {
+        // Handle orb mode light pulse
+        if (isOrbMode)
+        {
+            PerformLightPulse();
+            return;
+        }
+        
+        if (!canJump) return; // Check if jump is unlocked
         lastJumpPressedTime = Time.time;
     }
 
@@ -196,13 +239,15 @@ public class PlayerMovement : MonoBehaviour
 
     void TryJump()
     {
+        if (!canJump) return; // Check if jump is unlocked
+
         bool canUseCoyote = Time.time - lastGroundedTime <= coyoteTime;
 
         if (isGrounded || canUseCoyote)
         {
             DoJump();
         }
-        else if (jumpsRemaining > 0)
+        else if (jumpsRemaining > 0 && canDoubleJump) // Check if double jump is unlocked
         {
             DoJump();
         }
@@ -239,7 +284,7 @@ public class PlayerMovement : MonoBehaviour
 
     void OnDashPressed()
     {
-        if (isDashing || dashOnCooldown) return;
+        if (!canDash || isDashing || dashOnCooldown) return; // Check if dash is unlocked
 
         StartCoroutine(PerformDash());
     }
@@ -275,5 +320,153 @@ public class PlayerMovement : MonoBehaviour
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(groundCheck.position, 0.12f);
         }
+    }
+
+    // ===== ABILITY UNLOCK SYSTEM =====
+    
+    [System.Serializable]
+    public enum MovementStage
+    {
+        Stage0_Orb = 0,         // Floating orb with light pulse
+        Stage1_Movement = 1,    // Can move left/right
+        Stage2_Jump = 2,        // Can jump
+        Stage3_DoubleJump = 3,  // Can double jump
+        Stage4_Dash = 4,        // Can dash
+        Stage5_WallJump = 5     // Can wall jump (future)
+    }
+
+    [Header("Debug - Current Stage")]
+    [SerializeField] MovementStage currentStage = MovementStage.Stage0_Orb;
+
+    /// <summary>
+    /// Set the player's current movement stage and unlock abilities up to that stage
+    /// </summary>
+    public void SetMovementStage(MovementStage stage)
+    {
+        currentStage = stage;
+        
+        // Set orb mode
+        isOrbMode = stage == MovementStage.Stage0_Orb;
+        
+        // Unlock abilities based on stage
+        canMove = stage >= MovementStage.Stage1_Movement;
+        canJump = stage >= MovementStage.Stage2_Jump;
+        canDoubleJump = stage >= MovementStage.Stage3_DoubleJump;
+        canDash = stage >= MovementStage.Stage4_Dash;
+        canWallJump = stage >= MovementStage.Stage5_WallJump;
+        
+        // Update movement mode
+        UpdateMovementMode();
+        
+        // Reset jumps when unlocking abilities
+        if (canJump) ResetJumps();
+        
+        Debug.Log($"Movement abilities updated to Stage {(int)stage}: OrbMode={isOrbMode}, Movement={canMove}, Jump={canJump}, DoubleJump={canDoubleJump}, Dash={canDash}");
+    }
+
+    /// <summary>
+    /// Unlock specific abilities individually
+    /// </summary>
+    public void UnlockMovement() => canMove = true;
+    public void UnlockJump() => canJump = true;
+    public void UnlockDoubleJump() => canDoubleJump = true;
+    public void UnlockDash() => canDash = true;
+    public void UnlockWallJump() => canWallJump = true;
+
+    /// <summary>
+    /// Check if an ability is unlocked
+    /// </summary>
+    public bool IsAbilityUnlocked(MovementStage ability)
+    {
+        return currentStage >= ability;
+    }
+
+    /// <summary>
+    /// Get current abilities as a readable string
+    /// </summary>
+    public string GetUnlockedAbilitiesString()
+    {
+        var abilities = new System.Collections.Generic.List<string>();
+        if (isOrbMode) abilities.Add("Light Pulse");
+        if (canMove) abilities.Add("Movement");
+        if (canJump) abilities.Add("Jump");
+        if (canDoubleJump) abilities.Add("Double Jump");
+        if (canDash) abilities.Add("Dash");
+        if (canWallJump) abilities.Add("Wall Jump");
+        
+        return abilities.Count > 0 ? string.Join(", ", abilities) : "None";
+    }
+    
+    // ===== ORB MODE SYSTEM =====
+    
+    /// <summary>
+    /// Update movement mode based on current stage
+    /// </summary>
+    void UpdateMovementMode()
+    {
+        if (rb == null) return;
+        
+        if (isOrbMode)
+        {
+            // Set reduced gravity for floating effect
+            rb.gravityScale = orbGravityScale;
+        }
+        else
+        {
+            // Restore normal gravity
+            rb.gravityScale = originalGravityScale;
+        }
+    }
+    
+    /// <summary>
+    /// Handle orb physics - floating with damping and gentle movement
+    /// </summary>
+    void HandleOrbPhysics()
+    {
+        // Handle gentle horizontal movement
+        float targetVx = moveInput.x * orbMoveSpeed;
+        float currentVx = rb.linearVelocity.x;
+        
+        // Apply gentle acceleration towards target velocity
+        float newVx = Mathf.MoveTowards(currentVx, targetVx, orbMoveAcceleration * Time.fixedDeltaTime);
+        
+        // Apply gentle damping to vertical velocity for floating feel
+        float dampedVy = rb.linearVelocity.y * orbFloatDamping;
+        
+        // Update velocity
+        rb.linearVelocity = new Vector2(newVx, dampedVy);
+    }
+    
+    /// <summary>
+    /// Perform light pulse - main orb movement mechanic
+    /// </summary>
+    void PerformLightPulse()
+    {
+        // Check cooldown
+        if (Time.time - lastPulseTime < orbPulseCooldown) return;
+        
+        lastPulseTime = Time.time;
+        
+        // Get current movement input
+        Vector2 pulseDirection = Vector2.up; // Default upward pulse
+        
+        // Add horizontal component if A or D is held
+        if (Mathf.Abs(moveInput.x) > 0.1f)
+        {
+            pulseDirection.x = moveInput.x;
+            // Normalize to maintain consistent pulse strength
+            pulseDirection = pulseDirection.normalized;
+        }
+        
+        // Apply pulse force
+        Vector2 pulseForce = new Vector2(
+            pulseDirection.x * orbPulseSideForce,
+            pulseDirection.y * orbPulseForce
+        );
+        
+        rb.AddForce(pulseForce, ForceMode2D.Impulse);
+        
+        // Visual/audio feedback could be added here
+        Debug.Log($"💫 Light Pulse: {pulseDirection} (Force: {pulseForce})");
     }
 }

@@ -22,44 +22,10 @@ This repository is optimized for Unity development with:
 - Git with Git LFS support
 - .NET SDK 9.0.200+ (for .slnx support)
 
-### Clone Instructions
-```bash
-# Clone with LFS files
-git clone --recurse-submodules <your-repo-url>
-cd "2D Platformer"
-
-# Pull LFS files (if not automatically downloaded)
-git lfs pull
-```
-
 ### Development Setup
 1. Clone the repository
 2. Open the project in Unity Hub
 3. Unity will automatically import and setup the project
-
-## Features
-- Player movement with acceleration/deceleration
-- Variable height jumping
-- Double jump capability
-- Dash mechanics with cooldown
-- Coyote time and jump buffering
-- Input System integration
-
-## Project Structure
-```
-Assets/
-├── Scenes/          # Game scenes
-├── Scripts/         # C# scripts
-│   └── PlayerMovement.cs
-└── Settings/        # Unity settings and templates
-
-ProjectSettings/     # Unity project configuration
-```
-
-## Controls
-- **Move**: WASD / Arrow Keys
-- **Jump**: Space
-- **Dash**: Left Shift
 
 ## Technical Notes
 - Uses Unity's new Input System
