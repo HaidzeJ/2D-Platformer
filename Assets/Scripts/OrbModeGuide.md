@@ -6,11 +6,11 @@ The Orb Mode is the initial movement state in your 2D Platformer, where the play
 ## 🎮 Controls
 
 ### Orb Mode (Stage 0)
-- **A/D**: Apply gentle forces for drifting movement (only while airborne/floating)
+- **A/D**: Apply gentle forces for drifting movement (works continuously)
 - **Space**: Light Pulse (upward boost that creates lasting momentum)  
 - **Space + A/D**: Directional Light Pulse (diagonal momentum)
 - **Physics-based movement** - orb maintains momentum and drifts naturally
-- **Airborne control only** - no left/right movement when resting on ground
+- **Ground repulsion** - orb gently hovers above surfaces, never truly "lands"
 - **Momentum preservation** - forces from pulses and environmental elements create lasting motion
 
 ### Traditional Platformer (Stage 1+)  
@@ -24,8 +24,9 @@ The Orb Mode is the initial movement state in your 2D Platformer, where the play
 1. **Reduced Gravity**: `orbGravityScale = 0.3f` creates floating effect
 2. **Light Pulse Mechanics**: Space bar triggers upward or directional impulses
 3. **Inertia-Driven Movement**: Orb maintains momentum from forces and drifts naturally
-4. **Air Resistance**: Minimal drag allows momentum preservation while preventing runaway speeds
-5. **Pulse Cooldown**: Prevents spam clicking for balanced gameplay
+4. **Ground Repulsion**: Orb hovers above surfaces using distance-based upward forces
+5. **Air Resistance**: Minimal drag allows momentum preservation while preventing runaway speeds
+6. **Enhanced Pulse Cooldown**: 0.5s cooldown prevents spam with debug feedback
 
 ### Settings (Configurable in Inspector)
 ```csharp
@@ -33,16 +34,21 @@ The Orb Mode is the initial movement state in your 2D Platformer, where the play
 [SerializeField] float orbGravityScale = 0.3f;      // Reduced gravity for floating
 [SerializeField] float orbPulseForce = 8f;          // Upward pulse strength  
 [SerializeField] float orbPulseSideForce = 6f;      // Horizontal pulse strength
-[SerializeField] float orbPulseCooldown = 0.2f;     // Cooldown between pulses
+[SerializeField] float orbPulseCooldown = 0.5f;     // Cooldown between pulses (prevents spam)
 
 // Inertia-Driven Movement
-[SerializeField] float orbMoveForce = 4f;           // Force applied for A/D movement (airborne only)
+[SerializeField] float orbMoveForce = 4f;           // Force applied for A/D movement
 [SerializeField] float orbAirResistance = 0.99f;    // Air resistance (0.99 = very little drag)  
 [SerializeField] float orbMaxSpeed = 12f;           // Maximum speed limit
 [SerializeField] bool enableSpeedLimiting = true;   // Whether to limit maximum speed
+
+// Ground Repulsion System
+[SerializeField] float groundRepulsionForce = 6f;   // Upward force when near ground
+[SerializeField] float repulsionDistance = 0.8f;    // Distance from ground to start repulsion
+[SerializeField] AnimationCurve repulsionCurve;     // Force falloff curve (closer = stronger)
 ```
 
-**Important**: A/D movement only works when the orb is airborne (`!isGrounded`). When resting on the ground, the orb cannot move horizontally - it must first pulse (Space) to become airborne before gaining directional control.
+**Ground Repulsion**: The orb never truly "lands" on surfaces. Instead, it hovers gently above them using distance-based repulsion forces. This maintains continuous A/D control and creates a more ethereal floating experience.
 
 ## 🏗️ Level Design Considerations
 

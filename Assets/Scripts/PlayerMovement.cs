@@ -34,13 +34,18 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float orbGravityScale = 0.3f;      // Reduced gravity for floating
     [SerializeField] float orbPulseForce = 8f;          // Upward pulse force
     [SerializeField] float orbPulseSideForce = 6f;      // Horizontal pulse force
-    [SerializeField] float orbPulseCooldown = 0.2f;     // Time between pulses
+    [SerializeField] float orbPulseCooldown = 0.5f;     // Time between pulses (prevents spam)
     
     [Header("Orb Inertia Settings")]
     [SerializeField] float orbMoveForce = 4f;           // Force applied for A/D movement
     [SerializeField] float orbAirResistance = 0.99f;    // Air resistance (0.99 = very little drag)
     [SerializeField] float orbMaxSpeed = 12f;           // Maximum speed to prevent runaway velocity
     [SerializeField] bool enableSpeedLimiting = true;   // Whether to limit maximum speed
+    
+    [Header("Orb Ground Repulsion")]
+    [SerializeField] float groundRepulsionForce = 6f;   // Upward force when near ground
+    [SerializeField] float repulsionDistance = 0.8f;    // Distance from ground to start repulsion
+    [SerializeField] AnimationCurve repulsionCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)); // Force falloff curve
     
     [Header("Ability Unlocks")]
     [SerializeField] bool isOrbMode = true;            // Stage 0: Floating orb mode
@@ -432,16 +437,19 @@ public class PlayerMovement : MonoBehaviour
     }
     
     /// <summary>
-    /// Handle orb physics - inertia-driven movement with momentum preservation
+    /// Handle orb physics - inertia-driven movement with ground repulsion
     /// </summary>
     void HandleOrbPhysics()
     {
-        // Apply horizontal movement force ONLY when airborne (floating)
-        if (!isGrounded && Mathf.Abs(moveInput.x) > 0.1f)
+        // Apply horizontal movement force (now works at all times with ground repulsion)
+        if (Mathf.Abs(moveInput.x) > 0.1f)
         {
             Vector2 moveForce = new Vector2(moveInput.x * orbMoveForce, 0f);
             rb.AddForce(moveForce, ForceMode2D.Force);
         }
+        
+        // Apply ground repulsion to keep orb floating
+        ApplyGroundRepulsion();
         
         // Apply minimal air resistance to maintain momentum but prevent infinite acceleration
         Vector2 currentVelocity = rb.linearVelocity;
@@ -456,12 +464,48 @@ public class PlayerMovement : MonoBehaviour
     }
     
     /// <summary>
+    /// Apply ground repulsion to keep orb floating above surfaces
+    /// </summary>
+    void ApplyGroundRepulsion()
+    {
+        if (groundCheck == null) return;
+        
+        // Cast downward to detect ground distance
+        RaycastHit2D hit = Physics2D.Raycast(groundCheck.position, Vector2.down, repulsionDistance, groundLayer);
+        
+        if (hit.collider != null)
+        {
+            float distanceToGround = hit.distance;
+            
+            // Calculate repulsion strength based on distance (closer = stronger)
+            float normalizedDistance = distanceToGround / repulsionDistance; // 0 = touching, 1 = at max distance
+            float repulsionStrength = repulsionCurve.Evaluate(1f - normalizedDistance); // Invert so closer = stronger
+            
+            // Apply upward repulsion force
+            Vector2 repulsionForce = Vector2.up * groundRepulsionForce * repulsionStrength;
+            rb.AddForce(repulsionForce, ForceMode2D.Force);
+            
+            // Optional: Add slight damping to vertical velocity when very close to prevent bouncing
+            if (distanceToGround < repulsionDistance * 0.3f && rb.linearVelocity.y < 0f)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.8f);
+            }
+        }
+    }
+    
+    /// <summary>
     /// Perform light pulse - main orb movement mechanic
     /// </summary>
     void PerformLightPulse()
     {
-        // Check cooldown
-        if (Time.time - lastPulseTime < orbPulseCooldown) return;
+        // Check cooldown and provide feedback
+        float timeSinceLastPulse = Time.time - lastPulseTime;
+        if (timeSinceLastPulse < orbPulseCooldown)
+        {
+            // Optional: Could add visual feedback here for failed pulse attempts
+            Debug.Log($"💫 Pulse on cooldown ({orbPulseCooldown - timeSinceLastPulse:F1}s remaining)");
+            return;
+        }
         
         lastPulseTime = Time.time;
         
@@ -486,5 +530,22 @@ public class PlayerMovement : MonoBehaviour
         
         // Visual/audio feedback could be added here
         Debug.Log($"💫 Light Pulse: {pulseDirection} (Force: {pulseForce})");
+    }
+    
+    /// <summary>
+    /// Check if light pulse is available (not on cooldown)
+    /// </summary>
+    public bool IsPulseAvailable()
+    {
+        return Time.time - lastPulseTime >= orbPulseCooldown;
+    }
+    
+    /// <summary>
+    /// Get remaining cooldown time for light pulse
+    /// </summary>
+    public float GetPulseCooldownRemaining()
+    {
+        float remaining = orbPulseCooldown - (Time.time - lastPulseTime);
+        return Mathf.Max(0f, remaining);
     }
 }
