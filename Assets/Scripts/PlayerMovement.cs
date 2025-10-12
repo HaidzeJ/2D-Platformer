@@ -73,6 +73,9 @@ public class PlayerMovement : MonoBehaviour
     // Echo Pulse variables
     private Coroutine currentEchoPulse;
     private EchoPulseVisualEffect echoPulseVisual;
+    
+    // Light Resource Health
+    private LightResourceHealth lightHealth;
 
     Vector2 moveInput = Vector2.zero;
     bool jumpHeld;
@@ -96,6 +99,13 @@ public class PlayerMovement : MonoBehaviour
         if (echoPulseVisual == null)
         {
             echoPulseVisual = gameObject.AddComponent<EchoPulseVisualEffect>();
+        }
+        
+        // Get or create light resource health system
+        lightHealth = GetComponent<LightResourceHealth>();
+        if (lightHealth == null)
+        {
+            lightHealth = gameObject.AddComponent<LightResourceHealth>();
         }
     }
 
@@ -197,8 +207,9 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // Normal platformer movement
-        // Horizontal movement with acceleration smoothing
-        float targetVx = canMove ? moveInput.x * maxSpeed : 0f; // Check if movement is unlocked
+        // Horizontal movement with acceleration smoothing (affected by health)
+        float effectiveMaxSpeed = maxSpeed * GetHealthSpeedModifier();
+        float targetVx = canMove ? moveInput.x * effectiveMaxSpeed : 0f; // Check if movement is unlocked
         float accel = isGrounded ? runAcceleration : airAcceleration;
         float decel = isGrounded ? runDeceleration : airDeceleration;
 
@@ -271,7 +282,7 @@ public class PlayerMovement : MonoBehaviour
         {
             DoJump();
         }
-        else if (jumpsRemaining > 0 && canDoubleJump) // Check if double jump is unlocked
+        else if (jumpsRemaining > 0 && canDoubleJump && CanPerformAdvancedAbilities()) // Check if double jump is unlocked and have enough light
         {
             DoJump();
         }
@@ -308,7 +319,7 @@ public class PlayerMovement : MonoBehaviour
 
     void OnDashPressed()
     {
-        if (!canDash || isDashing || dashOnCooldown) return; // Check if dash is unlocked
+        if (!canDash || isDashing || dashOnCooldown || !CanPerformAdvancedAbilities()) return; // Check if dash is unlocked and have enough light
 
         StartCoroutine(PerformDash());
     }
@@ -430,6 +441,32 @@ public class PlayerMovement : MonoBehaviour
     /// Get the player's Rigidbody2D component for external physics interactions
     /// </summary>
     public Rigidbody2D GetRigidbody() => rb;
+    
+    // ===== LIGHT RESOURCE INTEGRATION =====
+    
+    /// <summary>
+    /// Check if the player has enough light energy to perform advanced abilities
+    /// </summary>
+    bool CanPerformAdvancedAbilities()
+    {
+        if (lightHealth == null) return true;
+        
+        // At low health, disable advanced abilities (dash, double jump)
+        return lightHealth.LightResourcePercent > 0.2f; // Need more than 20% health
+    }
+    
+    /// <summary>
+    /// Get movement speed modifier based on health (lower health = slower movement)
+    /// </summary>
+    float GetHealthSpeedModifier()
+    {
+        if (lightHealth == null) return 1f;
+        
+        float healthPercentage = lightHealth.LightResourcePercent;
+        
+        // Scale speed from 0.5x to 1.0x based on health (50% to 100% effectiveness)
+        return Mathf.Lerp(0.5f, 1f, healthPercentage);
+    }
     
     // ===== ORB MODE SYSTEM =====
     
