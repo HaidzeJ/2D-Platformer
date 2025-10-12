@@ -47,6 +47,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float repulsionDistance = 0.8f;    // Distance from ground to start repulsion
     [SerializeField] AnimationCurve repulsionCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)); // Force falloff curve
     
+    [Header("Echo Pulse Settings")]
+    [SerializeField] float echoPulseRadius = 10f;           // Maximum radius of echo detection
+    [SerializeField] float echoPulseExpandSpeed = 25f;      // How fast the echo ring expands
+    [SerializeField] LayerMask echoObjectLayers = -1;       // What layers contain echo objects
+    
     [Header("Ability Unlocks")]
     [SerializeField] bool isOrbMode = true;            // Stage 0: Floating orb mode
     [SerializeField] bool canMove = false;             // Stage 1: Basic movement
@@ -64,6 +69,10 @@ public class PlayerMovement : MonoBehaviour
     // Orb mode variables
     float lastPulseTime;
     float originalGravityScale;
+    
+    // Echo Pulse variables
+    private Coroutine currentEchoPulse;
+    private EchoPulseVisualEffect echoPulseVisual;
 
     Vector2 moveInput = Vector2.zero;
     bool jumpHeld;
@@ -81,6 +90,13 @@ public class PlayerMovement : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         playerInput = GetComponent<PlayerInput>();
+        
+        // Get or create echo pulse visual effect
+        echoPulseVisual = GetComponent<EchoPulseVisualEffect>();
+        if (echoPulseVisual == null)
+        {
+            echoPulseVisual = gameObject.AddComponent<EchoPulseVisualEffect>();
+        }
     }
 
     void OnEnable()
@@ -502,8 +518,6 @@ public class PlayerMovement : MonoBehaviour
         float timeSinceLastPulse = Time.time - lastPulseTime;
         if (timeSinceLastPulse < orbPulseCooldown)
         {
-            // Optional: Could add visual feedback here for failed pulse attempts
-            Debug.Log($"💫 Pulse on cooldown ({orbPulseCooldown - timeSinceLastPulse:F1}s remaining)");
             return;
         }
         
@@ -528,8 +542,14 @@ public class PlayerMovement : MonoBehaviour
         
         rb.AddForce(pulseForce, ForceMode2D.Impulse);
         
-        // Visual/audio feedback could be added here
-        Debug.Log($"💫 Light Pulse: {pulseDirection} (Force: {pulseForce})");
+        // Trigger Echo Pulse to reveal hidden objects
+        TriggerEchoPulse();
+        
+        // Trigger visual effect
+        if (echoPulseVisual != null)
+        {
+            echoPulseVisual.TriggerPulseEffect(transform.position);
+        }
     }
     
     /// <summary>
@@ -547,5 +567,67 @@ public class PlayerMovement : MonoBehaviour
     {
         float remaining = orbPulseCooldown - (Time.time - lastPulseTime);
         return Mathf.Max(0f, remaining);
+    }
+    
+    // ===== ECHO PULSE SYSTEM =====
+    
+    /// <summary>
+    /// Trigger an expanding echo pulse that reveals hidden echo objects
+    /// </summary>
+    void TriggerEchoPulse()
+    {
+        // Stop any current echo pulse
+        if (currentEchoPulse != null)
+        {
+            StopCoroutine(currentEchoPulse);
+        }
+        
+        // Start new echo pulse
+        currentEchoPulse = StartCoroutine(ExpandEchoPulse());
+        
+        Debug.Log("🔊 Echo Pulse triggered!");
+    }
+    
+    /// <summary>
+    /// Coroutine that handles the expanding echo pulse detection
+    /// </summary>
+    System.Collections.IEnumerator ExpandEchoPulse()
+    {
+        Vector2 pulseCenter = transform.position;
+        float currentRadius = 0f;
+        System.Collections.Generic.HashSet<EchoObject> revealedObjects = new System.Collections.Generic.HashSet<EchoObject>();
+        
+        // Expand the pulse over time
+        while (currentRadius < echoPulseRadius)
+        {
+            currentRadius += echoPulseExpandSpeed * Time.deltaTime;
+            
+            // Find all colliders within current radius
+            Collider2D[] colliders = Physics2D.OverlapCircleAll(pulseCenter, currentRadius, echoObjectLayers);
+            
+            foreach (Collider2D collider in colliders)
+            {
+                EchoObject echoObj = collider.GetComponent<EchoObject>();
+                if (echoObj != null && !revealedObjects.Contains(echoObj))
+                {
+                    // Calculate distance to determine if this object should be revealed now
+                    float distanceToObject = Vector2.Distance(pulseCenter, collider.transform.position);
+                    
+                    // Only reveal objects that the pulse has reached (with small buffer for timing)
+                    if (distanceToObject <= currentRadius + 0.5f)
+                    {
+                        // Use -1 to let each object use its own defaultRevealDuration
+                        echoObj.RevealObject(-1f);
+                        revealedObjects.Add(echoObj);
+                        Debug.Log($"🔍 Echo revealed: {echoObj.name} at distance {distanceToObject:F1}");
+                    }
+                }
+            }
+            
+            yield return null; // Wait for next frame
+        }
+        
+        currentEchoPulse = null;
+        Debug.Log($"🔊 Echo Pulse completed - revealed {revealedObjects.Count} objects");
     }
 }

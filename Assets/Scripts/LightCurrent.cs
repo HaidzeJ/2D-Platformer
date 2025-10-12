@@ -105,8 +105,6 @@ public class LightCurrent : MonoBehaviour
         {
             visualEffectComponent.Activate();
         }
-        
-        Debug.Log($"💨 Player entered Light Current: {name} (Direction: {NormalizedDirection})");
     }
     
     void OnTriggerExit2D(Collider2D other)
@@ -134,8 +132,6 @@ public class LightCurrent : MonoBehaviour
         {
             visualEffectComponent.Deactivate();
         }
-        
-        Debug.Log($"💨 Player exited Light Current: {name}");
     }
     
     void FixedUpdate()
@@ -268,4 +264,40 @@ public class LightCurrent : MonoBehaviour
         currentForce = Mathf.Max(0f, currentForce);
         maxVelocity = Mathf.Max(0f, maxVelocity);
     }
+    
+    // ===== ECHO SYSTEM INTEGRATION =====
+    
+    /// <summary>
+    /// Enable or disable the light current (called by EchoCurrentSwitcher)
+    /// </summary>
+    public void SetCurrentActive(bool active)
+    {
+        enabled = active;
+        currentCollider.enabled = active;
+        
+        // Update visual effects
+        if (visualEffectComponent != null)
+        {
+            if (active)
+            {
+                visualEffectComponent.Activate();
+            }
+            else
+            {
+                visualEffectComponent.Deactivate();
+            }
+        }
+        
+        // Handle player if they're currently in the current
+        if (!active && isPlayerInCurrent && currentPlayer != null)
+        {
+            // Player exits current when it's disabled
+            OnTriggerExit2D(currentPlayer.GetComponent<Collider2D>());
+        }
+    }
+    
+    /// <summary>
+    /// Check if the current is currently active
+    /// </summary>
+    public bool IsCurrentActive => enabled && currentCollider.enabled;
 }

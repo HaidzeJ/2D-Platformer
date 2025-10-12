@@ -50,7 +50,6 @@ public class AbilityUnlockTrigger : MonoBehaviour
         // Check if player already has this ability
         if (playerMovement.IsAbilityUnlocked(stageToUnlock))
         {
-            Debug.Log($"Player already has {stageToUnlock} unlocked!");
             return;
         }
 
