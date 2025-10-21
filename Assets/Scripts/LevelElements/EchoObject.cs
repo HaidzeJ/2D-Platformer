@@ -3,6 +3,7 @@ using System.Collections;
 
 /// <summary>
 /// Base class for objects that can be revealed/hidden by the Echo Pulse system.
+/// Supports three modes: Reveal (show hidden), Hide (hide visible), Toggle (switch state).
 /// Inherit from this to create specific echo object types like bridges, doors, switches, etc.
 /// </summary>
 public abstract class EchoObject : MonoBehaviour
@@ -10,7 +11,15 @@ public abstract class EchoObject : MonoBehaviour
     [Header("Echo Object Settings")]
     [SerializeField] protected float defaultRevealDuration = 2.5f;
     [SerializeField] protected bool startVisible = false;
-    [SerializeField] protected bool canToggle = false; // If true, each echo pulse toggles visibility
+    [SerializeField] protected EchoMode echoMode = EchoMode.Reveal;
+    
+    [System.Serializable]
+    public enum EchoMode
+    {
+        Reveal,     // Echo pulse reveals hidden objects temporarily (original behavior)
+        Hide,       // Echo pulse hides visible objects temporarily, then restores them
+        Toggle      // Echo pulse toggles between visible/hidden states
+    }
     
     [Header("Visual Feedback")]
     [SerializeField] protected Color hiddenColor = new Color(1f, 1f, 1f, 0.1f); // Almost transparent
@@ -49,7 +58,7 @@ public abstract class EchoObject : MonoBehaviour
         isRevealed = startVisible;
         UpdateVisibility(isRevealed, false); // false = no animation on start
         
-        Debug.Log($"🔍 EchoObject '{name}' initialized - Start Visible: {startVisible}, Can Toggle: {canToggle}");
+        Debug.Log($"🔍 EchoObject '{name}' initialized - Start Visible: {startVisible}, Echo Mode: {echoMode}");
     }
     
     /// <summary>
@@ -59,15 +68,22 @@ public abstract class EchoObject : MonoBehaviour
     {
         if (duration < 0f) duration = defaultRevealDuration;
         
-        if (canToggle)
+        switch (echoMode)
         {
-            // Toggle mode - switch visibility state
-            ToggleVisibility(duration);
-        }
-        else
-        {
-            // Reveal mode - always show when pulsed
-            ShowObject(duration);
+            case EchoMode.Reveal:
+                // Reveal mode - always show when pulsed
+                ShowObject(duration);
+                break;
+                
+            case EchoMode.Hide:
+                // Hide mode - always hide when pulsed
+                HideObject(duration);
+                break;
+                
+            case EchoMode.Toggle:
+                // Toggle mode - switch visibility state
+                ToggleVisibility(duration);
+                break;
         }
         
         // Call custom reveal behavior
@@ -117,18 +133,34 @@ public abstract class EchoObject : MonoBehaviour
     }
     
     /// <summary>
-    /// Hide the object immediately
+    /// Hide the object for a specified duration (or permanently if duration <= 0)
     /// </summary>
-    protected virtual void HideObject()
+    protected virtual void HideObject(float duration = 0f)
     {
+        // Stop any existing show/hide coroutine
         if (hideCoroutine != null)
         {
             StopCoroutine(hideCoroutine);
             hideCoroutine = null;
         }
         
+        // Update state and visuals
         isRevealed = false;
         UpdateVisibility(false, true);
+        
+        // Start show timer if duration is positive
+        if (duration > 0f)
+        {
+            hideCoroutine = StartCoroutine(ShowAfterDelay(duration));
+        }
+    }
+    
+    /// <summary>
+    /// Hide the object immediately (legacy method for backward compatibility)
+    /// </summary>
+    protected virtual void HideObjectImmediate()
+    {
+        HideObject(0f);
     }
     
     /// <summary>
@@ -232,7 +264,17 @@ public abstract class EchoObject : MonoBehaviour
     protected IEnumerator HideAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-        HideObject();
+        HideObjectImmediate();
+        hideCoroutine = null;
+    }
+    
+    /// <summary>
+    /// Coroutine to show object after delay (used by Hide mode)
+    /// </summary>
+    protected IEnumerator ShowAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        ShowObject(0f); // Show permanently (no auto-hide)
         hideCoroutine = null;
     }
     

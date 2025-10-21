@@ -23,6 +23,27 @@ The Echo Pulse system is automatically integrated into PlayerMovement.cs. Config
 
 ### Creating Echo Objects
 
+#### Echo Modes
+All echo objects support three different behaviors:
+
+**EchoMode.Reveal** (Default):
+- Objects start hidden/transparent
+- Echo pulse reveals them temporarily
+- Auto-hide after duration
+- Perfect for: Secret platforms, hidden passages
+
+**EchoMode.Hide** (NEW):
+- Objects start visible/solid
+- Echo pulse hides them temporarily  
+- Auto-reappear after duration
+- Perfect for: Disappearing platforms, temporary gaps
+
+**EchoMode.Toggle**:
+- Objects start visible or hidden
+- Echo pulse toggles their state
+- Optional duration for temporary changes
+- Perfect for: Switches, doors, interactive elements
+
 #### 1. Echo Bridges (Invisible Platforms)
 ```csharp
 // Add EchoBridge component to a GameObject with:
@@ -52,7 +73,7 @@ The Echo Pulse system is automatically integrated into PlayerMovement.cs. Config
    - Use context menu "Set Closed Position"
    - Move to open location, use "Set Open Position"
 4. Configure behavior:
-   - `canToggle`: true for doors that open/close on each pulse
+   - `echoMode`: Toggle for doors that open/close on each pulse
    - `staysOpenPermanently`: true for progression doors
 
 #### 3. Echo Current Switchers (Environmental Puzzles)

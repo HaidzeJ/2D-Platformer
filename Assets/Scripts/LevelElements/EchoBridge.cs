@@ -156,7 +156,7 @@ public class EchoBridge : EchoObject
     /// <summary>
     /// Override hide behavior to stop fade warning
     /// </summary>
-    protected override void HideObject()
+    protected override void HideObject(float duration = 0f)
     {
         // Stop any active fade warning
         if (fadeWarningCoroutine != null)
@@ -165,7 +165,7 @@ public class EchoBridge : EchoObject
             fadeWarningCoroutine = null;
         }
         
-        base.HideObject();
+        base.HideObject(duration);
     }
     
     /// <summary>

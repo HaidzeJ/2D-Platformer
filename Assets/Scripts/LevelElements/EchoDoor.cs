@@ -71,8 +71,8 @@ public class EchoDoor : EchoObject
             audioSource.PlayOneShot(doorRevealSound);
         }
         
-        // Toggle door state when revealed
-        if (canToggle)
+        // Handle door state when revealed based on echo mode
+        if (echoMode == EchoMode.Toggle)
         {
             ToggleDoor();
         }
@@ -194,7 +194,7 @@ public class EchoDoor : EchoObject
     /// <summary>
     /// Override hide behavior - doors might behave differently
     /// </summary>
-    protected override void HideObject()
+    protected override void HideObject(float duration = 0f)
     {
         if (staysOpenPermanently && isDoorOpen)
         {
@@ -202,7 +202,7 @@ public class EchoDoor : EchoObject
             return;
         }
         
-        base.HideObject();
+        base.HideObject(duration);
         
         // Optionally close door when hidden
         if (isDoorOpen)

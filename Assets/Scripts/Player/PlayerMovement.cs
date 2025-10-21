@@ -52,6 +52,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float echoPulseExpandSpeed = 25f;      // How fast the echo ring expands
     [SerializeField] LayerMask echoObjectLayers = -1;       // What layers contain echo objects
     
+    [Header("Tutorial Settings")]
+    [SerializeField] bool startInPreTutorial = false;     // Start level with pre-tutorial mode
+    [SerializeField] bool startWithFrozenControls = false; // Start level with frozen controls
+    [SerializeField] float tutorialControlUnfreezeDelay = 1f; // Delay before unfreezing after tutorial trigger
+    
     [Header("Ability Unlocks")]
     [SerializeField] bool isOrbMode = true;            // Stage 0: Floating orb mode
     [SerializeField] bool canMove = false;             // Stage 1: Basic movement
@@ -65,6 +70,7 @@ public class PlayerMovement : MonoBehaviour
     InputAction moveAction;
     InputAction jumpAction;
     InputAction dashAction;
+    InputAction clickAction;
     
     // Orb mode variables
     float lastPulseTime;
@@ -88,6 +94,17 @@ public class PlayerMovement : MonoBehaviour
     bool isDashing;
     bool dashOnCooldown;
     int facing = 1; // 1 = right, -1 = left
+    
+    // Control freeze system
+    bool controlsFrozen = false;
+    private System.Action onControlsUnfrozen;
+    
+    // Pre-tutorial system (completely frozen until input)
+    bool inPreTutorial = false;
+    private Vector3 lockedPosition;
+    
+    // Tutorial progression tracking
+    bool waitingForTutorialPlatform = false;
 
     void Awake()
     {
@@ -119,6 +136,8 @@ public class PlayerMovement : MonoBehaviour
             // Use the 'Sprint' action from the Input Actions asset as the dash binding.
             // This should match the action name in your InputSystem_Actions asset.
             dashAction = actions.FindAction("Sprint", true);
+            // Try to find a click action, or create one from mouse
+            clickAction = actions.FindAction("Click", true);
 
             if (moveAction != null)
             {
@@ -145,6 +164,9 @@ public class PlayerMovement : MonoBehaviour
         
         // Set initial orb mode if enabled
         UpdateMovementMode();
+        
+        // Initialize tutorial states
+        InitializeTutorialStates();
     }
 
     void OnDisable()
@@ -175,6 +197,12 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        // Handle pre-tutorial input first
+        HandlePreTutorialInput();
+        
+        // Skip normal updates if in pre-tutorial mode
+        if (inPreTutorial) return;
+        
         // Ground check
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, 0.12f, groundLayer);
         if (isGrounded) lastGroundedTime = Time.time;
@@ -197,6 +225,12 @@ public class PlayerMovement : MonoBehaviour
 
     void FixedUpdate()
     {
+        // Handle pre-tutorial position locking first
+        UpdatePreTutorialPosition();
+        
+        // Skip normal physics if in pre-tutorial mode
+        if (inPreTutorial) return;
+        
         if (isDashing) return; // dash controls velocity during dash
 
         // Handle orb mode physics
@@ -209,7 +243,8 @@ public class PlayerMovement : MonoBehaviour
         // Normal platformer movement
         // Horizontal movement with acceleration smoothing (affected by health)
         float effectiveMaxSpeed = maxSpeed * GetHealthSpeedModifier();
-        float targetVx = canMove ? moveInput.x * effectiveMaxSpeed : 0f; // Check if movement is unlocked
+        Vector2 effectiveMoveInput = controlsFrozen ? Vector2.zero : moveInput; // Respect control freeze
+        float targetVx = canMove ? effectiveMoveInput.x * effectiveMaxSpeed : 0f; // Check if movement is unlocked
         float accel = isGrounded ? runAcceleration : airAcceleration;
         float decel = isGrounded ? runDeceleration : airDeceleration;
 
@@ -241,16 +276,23 @@ public class PlayerMovement : MonoBehaviour
 
     void OnMovePerformed(InputAction.CallbackContext ctx)
     {
+        if (controlsFrozen) return;
         moveInput = ctx.ReadValue<Vector2>();
     }
 
     void OnMoveCanceled(InputAction.CallbackContext ctx)
     {
+        if (controlsFrozen) return;
         moveInput = Vector2.zero;
     }
 
     void OnJumpPressed()
     {
+        // Pre-tutorial input is handled separately in HandlePreTutorialInput()
+        if (inPreTutorial) return;
+        
+        if (controlsFrozen) return;
+        
         // Handle orb mode light pulse
         if (isOrbMode)
         {
@@ -264,11 +306,13 @@ public class PlayerMovement : MonoBehaviour
 
     void OnJumpStarted(InputAction.CallbackContext ctx)
     {
+        if (controlsFrozen) return;
         jumpHeld = true;
     }
 
     void OnJumpCanceled(InputAction.CallbackContext ctx)
     {
+        if (controlsFrozen) return;
         jumpHeld = false;
     }
 
@@ -319,6 +363,7 @@ public class PlayerMovement : MonoBehaviour
 
     void OnDashPressed()
     {
+        if (controlsFrozen) return;
         if (!canDash || isDashing || dashOnCooldown || !CanPerformAdvancedAbilities()) return; // Check if dash is unlocked and have enough light
 
         StartCoroutine(PerformDash());
@@ -442,6 +487,199 @@ public class PlayerMovement : MonoBehaviour
     /// </summary>
     public Rigidbody2D GetRigidbody() => rb;
     
+    // ===== CONTROL FREEZE SYSTEM =====
+    
+    /// <summary>
+    /// Freeze all player controls (movement, jumping, dashing, echo pulse)
+    /// </summary>
+    public void FreezeControls()
+    {
+        controlsFrozen = true;
+        moveInput = Vector2.zero; // Stop any current movement input
+        jumpHeld = false;
+        
+        Debug.Log("🔒 Player controls frozen");
+    }
+    
+    /// <summary>
+    /// Unfreeze player controls
+    /// </summary>
+    public void UnfreezeControls()
+    {
+        controlsFrozen = false;
+        onControlsUnfrozen?.Invoke();
+        onControlsUnfrozen = null;
+        
+        Debug.Log("🔓 Player controls unfrozen");
+    }
+    
+    /// <summary>
+    /// Unfreeze controls after a delay
+    /// </summary>
+    public void UnfreezeControlsAfterDelay(float delay, System.Action callback = null)
+    {
+        if (callback != null)
+        {
+            onControlsUnfrozen += callback;
+        }
+        
+        StartCoroutine(UnfreezeAfterDelay(delay));
+    }
+    
+    /// <summary>
+    /// Check if controls are currently frozen
+    /// </summary>
+    public bool AreControlsFrozen => controlsFrozen;
+    
+    System.Collections.IEnumerator UnfreezeAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        UnfreezeControls();
+    }
+    
+    // ===== PRE-TUTORIAL SYSTEM =====
+    // Three-stage tutorial system:
+    // 1. Pre-Tutorial: Player frozen in position, no gravity, only SPACE/click works
+    // 2. Gravity Tutorial: Gravity enabled, player falls, controls still frozen
+    // 3. Normal Tutorial: LockingRevealPlatform unfreezes controls after reveal
+    
+    /// <summary>
+    /// Start pre-tutorial mode: completely freeze player (position and gravity) until input
+    /// </summary>
+    public void StartPreTutorial()
+    {
+        inPreTutorial = true;
+        lockedPosition = transform.position;
+        
+        // Store current gravity and disable it
+        if (rb != null)
+        {
+            rb.gravityScale = 0f;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+        
+        // Also freeze normal controls
+        FreezeControls();
+        
+        Debug.Log("🔒 Pre-tutorial started: Player position and gravity locked. Press SPACE or LEFT CLICK to continue.");
+    }
+    
+    /// <summary>
+    /// End pre-tutorial mode: restore gravity but keep normal controls frozen
+    /// </summary>
+    public void EndPreTutorial()
+    {
+        if (!inPreTutorial) return;
+        
+        inPreTutorial = false;
+        
+        // Restore appropriate gravity based on current mode
+        if (rb != null)
+        {
+            if (isOrbMode)
+            {
+                // Use orb mode's reduced gravity for floaty physics
+                rb.gravityScale = orbGravityScale;
+                Debug.Log($"🔮 Pre-tutorial ended: Orb mode floaty physics restored (gravity: {orbGravityScale})");
+            }
+            else
+            {
+                // Use normal gravity for platformer physics
+                rb.gravityScale = originalGravityScale;
+                Debug.Log($"🌍 Pre-tutorial ended: Normal physics restored (gravity: {originalGravityScale})");
+            }
+        }
+        
+        // Keep controls frozen - they'll be unfrozen when tutorial platform is activated
+        waitingForTutorialPlatform = true;
+        
+        Debug.Log("🌍 Pre-tutorial ended: Gravity restored. Player will fall until they trigger the tutorial platform.");
+    }
+    
+    /// <summary>
+    /// Initialize tutorial states based on settings
+    /// </summary>
+    void InitializeTutorialStates()
+    {
+        if (startInPreTutorial)
+        {
+            StartPreTutorial();
+        }
+        else if (startWithFrozenControls)
+        {
+            FreezeControls();
+            waitingForTutorialPlatform = true;
+        }
+    }
+    
+    /// <summary>
+    /// Called when a tutorial platform is activated (for event-driven design)
+    /// </summary>
+    public void OnTutorialPlatformActivated()
+    {
+        if (waitingForTutorialPlatform)
+        {
+            waitingForTutorialPlatform = false;
+            UnfreezeControlsAfterDelay(tutorialControlUnfreezeDelay, () => {
+                Debug.Log("🎮 Tutorial platform triggered - controls unfrozen!");
+            });
+        }
+        
+        // If still in pre-tutorial, end it
+        if (inPreTutorial)
+        {
+            EndPreTutorial();
+        }
+    }
+    
+    /// <summary>
+    /// Check if currently in pre-tutorial mode
+    /// </summary>
+    public bool IsInPreTutorial => inPreTutorial;
+    
+    /// <summary>
+    /// Handle pre-tutorial input (space or left click to enable gravity)
+    /// </summary>
+    void HandlePreTutorialInput()
+    {
+        if (!inPreTutorial) return;
+        
+        bool spacePressed = jumpAction != null && jumpAction.WasPressedThisFrame();
+        bool leftClickPressed = false;
+        
+        // Try to get click input from Input System
+        if (clickAction != null)
+        {
+            leftClickPressed = clickAction.WasPressedThisFrame();
+        }
+        else
+        {
+            // Fallback: Use Mouse.current if available (Input System way)
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            leftClickPressed = mouse != null && mouse.leftButton.wasPressedThisFrame;
+        }
+        
+        if (spacePressed || leftClickPressed)
+        {
+            EndPreTutorial();
+        }
+    }
+    
+    /// <summary>
+    /// Update position locking during pre-tutorial
+    /// </summary>
+    void UpdatePreTutorialPosition()
+    {
+        if (inPreTutorial && rb != null)
+        {
+            // Lock position completely
+            transform.position = lockedPosition;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
+    
     // ===== LIGHT RESOURCE INTEGRATION =====
     
     /// <summary>
@@ -495,9 +733,10 @@ public class PlayerMovement : MonoBehaviour
     void HandleOrbPhysics()
     {
         // Apply horizontal movement force (now works at all times with ground repulsion)
-        if (Mathf.Abs(moveInput.x) > 0.1f)
+        Vector2 effectiveMoveInput = controlsFrozen ? Vector2.zero : moveInput; // Respect control freeze
+        if (Mathf.Abs(effectiveMoveInput.x) > 0.1f)
         {
-            Vector2 moveForce = new Vector2(moveInput.x * orbMoveForce, 0f);
+            Vector2 moveForce = new Vector2(effectiveMoveInput.x * orbMoveForce, 0f);
             rb.AddForce(moveForce, ForceMode2D.Force);
         }
         
