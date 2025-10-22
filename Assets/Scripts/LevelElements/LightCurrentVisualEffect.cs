@@ -9,6 +9,9 @@ public class LightCurrentVisualEffect : MonoBehaviour
     [Header("Particle Settings")]
     [SerializeField] ParticleSystem particleEffect;
     [SerializeField] bool createParticleSystemIfMissing = true;
+    [SerializeField] float particleSize = 0.3f; // Configurable particle size
+    [SerializeField] int maxParticles = 100; // Configurable max particles
+    [SerializeField] float emissionRate = 30f; // Configurable emission rate
     
     [Header("Flow Animation")]
     [SerializeField] bool animateFlow = true;
@@ -66,16 +69,16 @@ public class LightCurrentVisualEffect : MonoBehaviour
         
         particleEffect = psObject.AddComponent<ParticleSystem>();
         
-        // Configure basic settings
+        // Configure basic settings with larger, more visible particles
         var main = particleEffect.main;
         main.startLifetime = 2f;
         main.startSpeed = 1f;
-        main.startSize = 0.1f;
+        main.startSize = particleSize; // Use configurable size instead of hardcoded 0.1f
         main.startColor = currentColor;
-        main.maxParticles = 50;
+        main.maxParticles = maxParticles; // Use configurable max particles
         
         var emission = particleEffect.emission;
-        emission.rateOverTime = 20f;
+        emission.rateOverTime = emissionRate; // Use configurable emission rate
         
         var shape = particleEffect.shape;
         shape.enabled = true;
@@ -122,9 +125,9 @@ public class LightCurrentVisualEffect : MonoBehaviour
         float targetIntensity = isActive ? activeIntensity : idleIntensity;
         currentIntensity = Mathf.MoveTowards(currentIntensity, targetIntensity, transitionSpeed * Time.deltaTime);
         
-        // Apply intensity to emission rate
+        // Apply intensity to emission rate with configurable base values
         var emission = particleEffect.emission;
-        emission.rateOverTime = Mathf.Lerp(5f, 30f, currentIntensity);
+        emission.rateOverTime = Mathf.Lerp(emissionRate * 0.2f, emissionRate, currentIntensity);
         
         // Apply intensity to particle alpha
         Color baseColor = currentColor;
@@ -187,6 +190,17 @@ public class LightCurrentVisualEffect : MonoBehaviour
     public void UpdateForCurrentProperties()
     {
         ConfigureForLightCurrent();
+        
+        // Update particle size and count if particle system exists
+        if (particleEffect != null)
+        {
+            var main = particleEffect.main;
+            main.startSize = particleSize;
+            main.maxParticles = maxParticles;
+            
+            var emission = particleEffect.emission;
+            emission.rateOverTime = emissionRate;
+        }
     }
     
     /// <summary>
@@ -201,12 +215,52 @@ public class LightCurrentVisualEffect : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Set custom particle size for this light current
+    /// </summary>
+    public void SetParticleSize(float size)
+    {
+        particleSize = size;
+        if (particleEffect != null)
+        {
+            var main = particleEffect.main;
+            main.startSize = particleSize;
+        }
+    }
+    
+    /// <summary>
+    /// Set particle count for this light current
+    /// </summary>
+    public void SetParticleCount(int count)
+    {
+        maxParticles = count;
+        if (particleEffect != null)
+        {
+            var main = particleEffect.main;
+            main.maxParticles = maxParticles;
+        }
+    }
+    
+    /// <summary>
+    /// Set emission rate for this light current
+    /// </summary>
+    public void SetEmissionRate(float rate)
+    {
+        emissionRate = rate;
+        if (particleEffect != null)
+        {
+            var emission = particleEffect.emission;
+            emission.rateOverTime = emissionRate;
+        }
+    }
+    
     void OnValidate()
     {
         // Update settings when changed in inspector
         if (Application.isPlaying && particleEffect != null)
         {
             ConfigureForLightCurrent();
+            UpdateForCurrentProperties();
         }
     }
 }

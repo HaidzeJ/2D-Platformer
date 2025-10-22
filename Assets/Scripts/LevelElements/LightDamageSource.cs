@@ -57,6 +57,9 @@ public class LightDamageSource : MonoBehaviour
             col = gameObject.AddComponent<CircleCollider2D>();
             ((CircleCollider2D)col).radius = damageRadius;
         }
+        
+        // For physics layer setup, we need a trigger to detect collision
+        // even when physics collision is disabled in the matrix
         col.isTrigger = true;
     }
     
@@ -96,6 +99,49 @@ public class LightDamageSource : MonoBehaviour
     void OnTriggerExit2D(Collider2D other)
     {
         if (other.CompareTag("Player"))
+        {
+            isPlayerInRange = false;
+            StopAllDamage();
+        }
+    }
+    
+    // Add collision detection for physics layer setup
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            playerHealth = collision.gameObject.GetComponent<LightResourceHealth>();
+            if (playerHealth != null)
+            {
+                isPlayerInRange = true;
+                
+                switch (damageType)
+                {
+                    case DamageType.Contact:
+                        DealInstantDamage();
+                        break;
+                        
+                    case DamageType.Proximity:
+                        DealInstantDamage();
+                        break;
+                        
+                    case DamageType.Continuous:
+                        StartContinuousDamage();
+                        break;
+                        
+                    case DamageType.Periodic:
+                        StartPeriodicDamage();
+                        break;
+                }
+                
+                TriggerDamageEffects();
+            }
+        }
+    }
+    
+    void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
         {
             isPlayerInRange = false;
             StopAllDamage();
